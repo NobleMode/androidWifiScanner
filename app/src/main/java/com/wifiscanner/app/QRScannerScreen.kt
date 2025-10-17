@@ -20,6 +20,12 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 
+// TODO: Add visual bounding box overlay when QR code is detected
+//       - Draw rectangle around detected QR code using Canvas
+//       - Show green box when valid WiFi QR is found
+//       - Animate the box for better UX
+//       - Use barcode.boundingBox to get coordinates
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QRScannerScreen(

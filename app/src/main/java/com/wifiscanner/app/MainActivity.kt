@@ -10,15 +10,23 @@ import androidx.compose.ui.Modifier
 import com.wifiscanner.app.ui.theme.WiFiQRScannerTheme
 
 class MainActivity : ComponentActivity() {
+    private lateinit var themeManager: ThemeManager
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        themeManager = ThemeManager(this)
+        
         setContent {
-            WiFiQRScannerTheme {
+            val isDarkMode = themeManager.isDarkMode.value
+            
+            WiFiQRScannerTheme(darkTheme = isDarkMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    WiFiScannerApp()
+                    WiFiScannerApp(
+                        themeManager = themeManager
+                    )
                 }
             }
         }

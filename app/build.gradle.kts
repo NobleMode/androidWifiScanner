@@ -78,6 +78,12 @@ dependencies {
     // Accompanist for permissions
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
     
+    // Gson for JSON serialization
+    implementation("com.google.code.gson:gson:2.10.1")
+    
+    // ZXing for QR code generation
+    implementation("com.google.zxing:core:3.5.2")
+    
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

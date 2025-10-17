@@ -12,20 +12,38 @@ import com.google.accompanist.permissions.*
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun WiFiScannerApp() {
+fun WiFiScannerApp(themeManager: ThemeManager) {
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
     val locationPermissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     
     var scannedWiFiData by remember { mutableStateOf<WiFiData?>(null) }
     var showScanner by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
+    var showGenerateQR by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
+    val historyManager = remember { WiFiHistoryManager(context) }
 
     when {
+        showHistory -> {
+            WiFiHistoryScreen(
+                onBack = { showHistory = false },
+                onConnectToNetwork = { wifiData ->
+                    connectToWiFi(context, wifiData)
+                    showHistory = false
+                }
+            )
+        }
+        showGenerateQR -> {
+            GenerateQRScreen(
+                onBack = { showGenerateQR = false }
+            )
+        }
         scannedWiFiData != null -> {
             WiFiDetailsScreen(
                 wifiData = scannedWiFiData!!,
                 onConnect = { data ->
+                    historyManager.saveNetwork(data)
                     connectToWiFi(context, data)
                     scannedWiFiData = null
                     showScanner = false
@@ -62,6 +80,10 @@ fun WiFiScannerApp() {
                         }
                     }
                 },
+                onHistoryClick = { showHistory = true },
+                onGenerateQRClick = { showGenerateQR = true },
+                onToggleTheme = { themeManager.toggleTheme() },
+                isDarkMode = themeManager.isDarkMode.value,
                 cameraPermissionGranted = cameraPermissionState.status.isGranted,
                 locationPermissionGranted = locationPermissionState.status.isGranted
             )
@@ -72,6 +94,10 @@ fun WiFiScannerApp() {
 @Composable
 fun MainScreen(
     onScanClick: () -> Unit,
+    onHistoryClick: () -> Unit,
+    onGenerateQRClick: () -> Unit,
+    onToggleTheme: () -> Unit,
+    isDarkMode: Boolean,
     cameraPermissionGranted: Boolean,
     locationPermissionGranted: Boolean
 ) {
@@ -82,6 +108,21 @@ fun MainScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // Theme toggle at top
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            IconButton(onClick = onToggleTheme) {
+                Text(
+                    text = if (isDarkMode) "☀️" else "🌙",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+            }
+        }
+        
         Text(
             text = "📱 WiFi QR Scanner",
             style = MaterialTheme.typography.headlineLarge,
@@ -105,6 +146,28 @@ fun MainScreen(
                 .height(56.dp)
         ) {
             Text("📸 Scan That QR!")
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        OutlinedButton(
+            onClick = onHistoryClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+        ) {
+            Text("📜 View History")
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        OutlinedButton(
+            onClick = onGenerateQRClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+        ) {
+            Text("🎨 Generate QR Code")
         }
         
         if (!cameraPermissionGranted || !locationPermissionGranted) {
