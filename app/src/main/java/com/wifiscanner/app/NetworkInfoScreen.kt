@@ -13,10 +13,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import java.net.NetworkInterface
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,7 +27,17 @@ fun NetworkInfoScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val networkInfo = remember { getNetworkInfo(context) }
+    var networkInfo: NetworkInfoData? by remember { mutableStateOf(null) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        isLoading = true
+        val info = withContext(Dispatchers.IO) {
+            getNetworkInfo(context)
+        }
+        networkInfo = info
+        isLoading = false
+    }
 
     Scaffold(
         topBar = {
@@ -38,124 +51,137 @@ fun NetworkInfoScreen(
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            if (networkInfo.isConnected) {
-                // WiFi Name
-                InfoCard(
-                    title = "📶 Network Name",
-                    value = networkInfo.ssid,
-                    subtitle = "SSID"
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Connection Details
-                InfoCard(
-                    title = "🔒 Security",
-                    value = networkInfo.security,
-                    subtitle = "Encryption Type"
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // IP Address
-                InfoCard(
-                    title = "🌐 IP Address",
-                    value = networkInfo.ipAddress,
-                    subtitle = "Local Network Address"
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // MAC Address
-                InfoCard(
-                    title = "🔖 MAC Address",
-                    value = networkInfo.macAddress,
-                    subtitle = "Hardware Address"
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Signal Strength
-                InfoCard(
-                    title = "📡 Signal Strength",
-                    value = "${networkInfo.signalStrength} dBm (${networkInfo.signalLevel}/4)",
-                    subtitle = "RSSI Level"
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Frequency
-                if (networkInfo.frequency > 0) {
-                    val band = if (networkInfo.frequency > 5000) "5 GHz" else "2.4 GHz"
-                    InfoCard(
-                        title = "📻 Frequency",
-                        value = "${networkInfo.frequency} MHz",
-                        subtitle = "$band Band"
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                // Link Speed
-                if (networkInfo.linkSpeed > 0) {
-                    InfoCard(
-                        title = "⚡ Link Speed",
-                        value = "${networkInfo.linkSpeed} Mbps",
-                        subtitle = "Connection Speed"
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                // Gateway
-                if (networkInfo.gateway.isNotEmpty()) {
-                    InfoCard(
-                        title = "🚪 Gateway",
-                        value = networkInfo.gateway,
-                        subtitle = "Router IP Address"
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                // DNS
-                if (networkInfo.dns.isNotEmpty()) {
-                    InfoCard(
-                        title = "🗂️ DNS Server",
-                        value = networkInfo.dns,
-                        subtitle = "Domain Name System"
-                    )
-                }
-
-            } else {
-                // Not connected
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else {
+            networkInfo?.let { info ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp)
-                    ) {
-                        Text(
-                            text = "❌ Not Connected",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                    if (info.isConnected) {
+                        // WiFi Name
+                        InfoCard(
+                            title = "📶 Network Name",
+                            value = info.ssid,
+                            subtitle = "SSID"
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Connect to a WiFi network to see network information",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Connection Details
+                        InfoCard(
+                            title = "🔒 Security",
+                            value = info.security,
+                            subtitle = "Encryption Type"
                         )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // IP Address
+                        InfoCard(
+                            title = "🌐 IP Address",
+                            value = info.ipAddress,
+                            subtitle = "Local Network Address"
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // MAC Address
+                        InfoCard(
+                            title = "🔖 MAC Address",
+                            value = info.macAddress,
+                            subtitle = "Hardware Address"
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Signal Strength
+                        InfoCard(
+                            title = "📡 Signal Strength",
+                            value = "${info.signalStrength} dBm (${info.signalLevel}/4)",
+                            subtitle = "RSSI Level"
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Frequency
+                        if (info.frequency > 0) {
+                            val band = if (info.frequency > 5000) "5 GHz" else "2.4 GHz"
+                            InfoCard(
+                                title = "📻 Frequency",
+                                value = "${info.frequency} MHz",
+                                subtitle = "$band Band"
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+
+                        // Link Speed
+                        if (info.linkSpeed > 0) {
+                            InfoCard(
+                                title = "⚡ Link Speed",
+                                value = "${info.linkSpeed} Mbps",
+                                subtitle = "Connection Speed"
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+
+                        // Gateway
+                        if (info.gateway.isNotEmpty()) {
+                            InfoCard(
+                                title = "🚪 Gateway",
+                                value = info.gateway,
+                                subtitle = "Router IP Address"
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+
+                        // DNS
+                        if (info.dns.isNotEmpty()) {
+                            InfoCard(
+                                title = "🗂️ DNS Server",
+                                value = info.dns,
+                                subtitle = "Domain Name System"
+                            )
+                        }
+
+                    } else {
+                        // Not connected
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp)
+                            ) {
+                                Text(
+                                    text = "❌ Not Connected",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Connect to a WiFi network to see network information",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
                     }
                 }
             }

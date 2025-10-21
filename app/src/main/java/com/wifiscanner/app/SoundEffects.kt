@@ -7,6 +7,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Sound effects manager for audio feedback
@@ -17,6 +21,7 @@ class SoundEffects(context: Context) {
     private var successSound: Int = 0
     private var errorSound: Int = 0
     private var clickSound: Int = 0
+    private val scope = CoroutineScope(Dispatchers.Default)
 
     init {
         val audioAttributes = AudioAttributes.Builder()
@@ -37,68 +42,48 @@ class SoundEffects(context: Context) {
      * Play scan beep sound
      */
     fun playScanBeep() {
-        // Use system notification sound as fallback
-        try {
-            android.media.ToneGenerator(
-                android.media.AudioManager.STREAM_NOTIFICATION,
-                50
-            ).apply {
-                startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 100)
-                release()
-            }
-        } catch (e: Exception) {
-            // Ignore if sound fails
-        }
+        playTone(android.media.ToneGenerator.TONE_PROP_BEEP, 100, 50)
     }
 
     /**
      * Play success sound
      */
     fun playSuccess() {
-        try {
-            android.media.ToneGenerator(
-                android.media.AudioManager.STREAM_NOTIFICATION,
-                70
-            ).apply {
-                startTone(android.media.ToneGenerator.TONE_PROP_ACK, 150)
-                release()
-            }
-        } catch (e: Exception) {
-            // Ignore if sound fails
-        }
+        playTone(android.media.ToneGenerator.TONE_PROP_ACK, 150, 70)
     }
 
     /**
      * Play error sound
      */
     fun playError() {
-        try {
-            android.media.ToneGenerator(
-                android.media.AudioManager.STREAM_NOTIFICATION,
-                70
-            ).apply {
-                startTone(android.media.ToneGenerator.TONE_PROP_NACK, 200)
-                release()
-            }
-        } catch (e: Exception) {
-            // Ignore if sound fails
-        }
+        playTone(android.media.ToneGenerator.TONE_PROP_NACK, 200, 70)
     }
 
     /**
      * Play click sound
      */
     fun playClick() {
-        try {
-            android.media.ToneGenerator(
-                android.media.AudioManager.STREAM_NOTIFICATION,
-                30
-            ).apply {
-                startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 50)
-                release()
+        playTone(android.media.ToneGenerator.TONE_PROP_BEEP, 50, 30)
+    }
+    
+    /**
+     * Play a tone with proper cleanup
+     */
+    private fun playTone(toneType: Int, durationMs: Int, volume: Int) {
+        scope.launch {
+            try {
+                val toneGen = android.media.ToneGenerator(
+                    android.media.AudioManager.STREAM_NOTIFICATION,
+                    volume
+                )
+                toneGen.startTone(toneType, durationMs)
+                // Wait for tone to finish before releasing
+                delay(durationMs.toLong() + 50)
+                toneGen.stopTone()
+                toneGen.release()
+            } catch (e: Exception) {
+                // Ignore if sound fails
             }
-        } catch (e: Exception) {
-            // Ignore if sound fails
         }
     }
 

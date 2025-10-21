@@ -1,8 +1,11 @@
 package com.wifiscanner.app
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.wifi.WifiManager
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -13,23 +16,50 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.WriterException
 import com.google.zxing.common.BitMatrix
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GenerateQRScreen(
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val historyManager = remember(context) { WiFiHistoryManager(context) }
+    var savedNetworks by remember { mutableStateOf<List<SavedWiFiNetwork>>(emptyList()) }
+    var currentWiFi by remember { mutableStateOf<CurrentWiFiInfo?>(null) }
+    val haptic = rememberHapticFeedback()
+    val sounds = rememberSoundEffects()
+    
+    // Load data asynchronously
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val networks = historyManager.getSavedNetworks()
+            val wifi = getCurrentConnectedWiFi(context)
+            withContext(Dispatchers.Main) {
+                savedNetworks = networks
+                currentWiFi = wifi
+            }
+        }
+    }
+    
+    var inputMode by remember { mutableStateOf("manual") } // "manual", "current", "saved"
     var ssid by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var securityType by remember { mutableStateOf("WPA") }
     var isHidden by remember { mutableStateOf(false) }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var expanded by remember { mutableStateOf(false) }
+    var savedNetworkExpanded by remember { mutableStateOf(false) }
+    var selectedSavedNetwork by remember { mutableStateOf<SavedWiFiNetwork?>(null) }
     
     val securityOptions = listOf("WPA", "WEP", "nopass")
     
@@ -38,7 +68,10 @@ fun GenerateQRScreen(
             TopAppBar(
                 title = { Text("🎨 Generate WiFi QR") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        haptic.tap()
+                        onBack()
+                    }) {
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
                 }
@@ -60,6 +93,173 @@ fun GenerateQRScreen(
             )
             
             Spacer(modifier = Modifier.height(24.dp))
+            
+            // Input Mode Selection
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Select Network Source:",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Current Network Button
+                    currentWiFi?.let { wifi ->
+                        ElevatedButton(
+                            onClick = {
+                                haptic.tap()
+                                sounds.playClick()
+                                inputMode = "current"
+                                ssid = wifi.ssid
+                                password = "" // Can't retrieve password
+                                securityType = "WPA"
+                                isHidden = false
+                                qrBitmap = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.elevatedButtonColors(
+                                containerColor = if (inputMode == "current") 
+                                    MaterialTheme.colorScheme.primaryContainer 
+                                else 
+                                    MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Text("📶 Current Network: ${wifi.ssid}")
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    
+                    // Saved Networks Dropdown
+                    if (savedNetworks.isNotEmpty()) {
+                        ExposedDropdownMenuBox(
+                            expanded = savedNetworkExpanded,
+                            onExpandedChange = { 
+                                haptic.tap()
+                                savedNetworkExpanded = it 
+                            }
+                        ) {
+                            OutlinedTextField(
+                                value = if (selectedSavedNetwork != null) 
+                                    "💾 ${selectedSavedNetwork!!.ssid}" 
+                                else 
+                                    "💾 Select Saved Network...",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Saved Networks") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = savedNetworkExpanded) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = if (inputMode == "saved") 
+                                        MaterialTheme.colorScheme.primaryContainer 
+                                    else 
+                                        MaterialTheme.colorScheme.surface,
+                                    unfocusedContainerColor = if (inputMode == "saved") 
+                                        MaterialTheme.colorScheme.primaryContainer 
+                                    else 
+                                        MaterialTheme.colorScheme.surface
+                                ),
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .fillMaxWidth()
+                            )
+                            
+                            ExposedDropdownMenu(
+                                expanded = savedNetworkExpanded,
+                                onDismissRequest = { savedNetworkExpanded = false }
+                            ) {
+                                savedNetworks.forEach { network ->
+                                    DropdownMenuItem(
+                                        text = { 
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(network.ssid)
+                                                if (network.isFavorite) Text("⭐")
+                                            }
+                                        },
+                                        onClick = {
+                                            haptic.tap()
+                                            sounds.playClick()
+                                            inputMode = "saved"
+                                            selectedSavedNetwork = network
+                                            ssid = network.ssid
+                                            password = network.password
+                                            securityType = network.encryptionType
+                                            isHidden = network.isHidden
+                                            savedNetworkExpanded = false
+                                            qrBitmap = null
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    
+                    // Manual Entry Button
+                    ElevatedButton(
+                        onClick = {
+                            haptic.tap()
+                            sounds.playClick()
+                            inputMode = "manual"
+                            ssid = ""
+                            password = ""
+                            securityType = "WPA"
+                            isHidden = false
+                            selectedSavedNetwork = null
+                            qrBitmap = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.elevatedButtonColors(
+                            containerColor = if (inputMode == "manual") 
+                                MaterialTheme.colorScheme.primaryContainer 
+                            else 
+                                MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Text("⌨️ Manual Entry")
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // Show warning for current network (no password)
+            if (inputMode == "current") {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        text = "⚠️ Note: Android doesn't allow apps to read WiFi passwords. Please enter the password manually below.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            
+            // Network Details Section
+            Text(
+                text = "Network Details:",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.align(Alignment.Start)
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
             
             // SSID Input
             OutlinedTextField(
@@ -151,8 +351,15 @@ fun GenerateQRScreen(
             // Generate Button
             Button(
                 onClick = {
+                    haptic.success()
+                    sounds.playSuccess()
                     if (ssid.isNotEmpty()) {
-                        qrBitmap = generateWiFiQRCode(ssid, password, securityType, isHidden)
+                        scope.launch {
+                            val bitmap = withContext(Dispatchers.Default) {
+                                generateWiFiQRCode(ssid, password, securityType, isHidden)
+                            }
+                            qrBitmap = bitmap
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -248,4 +455,37 @@ fun escapeSpecialCharacters(input: String): String {
         .replace(";", "\\;")
         .replace(",", "\\,")
         .replace(":", "\\:")
+}
+
+/**
+ * Get currently connected WiFi network info
+ * Returns null if not connected or can't access info
+ * Note: Android doesn't allow apps to read WiFi passwords
+ */
+fun getCurrentConnectedWiFi(context: Context): CurrentWiFiInfo? {
+    try {
+        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            ?: return null
+        
+        val wifiInfo = wifiManager.connectionInfo ?: return null
+        val ssid = wifiInfo.ssid?.removeSurrounding("\"") ?: return null
+        
+        // Return null if not connected or unknown SSID
+        if (ssid == "<unknown ssid>" || ssid.isBlank()) {
+            return null
+        }
+        
+        val signalStrength = wifiInfo.rssi
+        val signalLevel = WifiManager.calculateSignalLevel(signalStrength, 5)
+        val frequency = wifiInfo.frequency
+        val frequencyBand = when {
+            frequency in 2400..2500 -> "2.4 GHz"
+            frequency in 5000..5900 -> "5 GHz"
+            else -> "${frequency} MHz"
+        }
+        
+        return CurrentWiFiInfo(ssid, signalStrength, signalLevel, frequencyBand)
+    } catch (e: Exception) {
+        return null
+    }
 }

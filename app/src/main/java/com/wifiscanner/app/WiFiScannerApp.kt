@@ -24,7 +24,8 @@ fun WiFiScannerApp(themeManager: ThemeManager) {
     var showNetworkInfo by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
-    val historyManager = remember { WiFiHistoryManager(context) }
+    // Memoize historyManager to prevent recreation
+    val historyManager = remember(context) { WiFiHistoryManager(context) }
 
     when {
         showNetworkInfo -> {
